@@ -151,7 +151,7 @@
 
   <section class="summary">
     <div class="stat exp"><div class="label">סה״כ הוצאות</div><div class="value" id="st-total">—</div></div>
-    <div class="stat share"><div class="label">חלק לאדם</div><div class="value" id="st-share">—</div></div>
+    <div class="stat share"><div class="label">טרם שולם</div><div class="value" id="st-share">—</div></div>
     <div class="stat paid"><div class="label">שולם עד כה</div><div class="value" id="st-paid">—</div></div>
   </section>
 
@@ -200,7 +200,7 @@
 <script>
 (function(){
   "use strict";
-  var KEY = "sheva-splitter-v7";
+  var KEY = "sheva-splitter-v8";
   var DEFAULT = {
     people: ["אביחי","יוגב","חופית"],
     expenses: [
@@ -245,7 +245,7 @@
       var amt = Number(e.amount)||0;
       if(e.payer && paid.hasOwnProperty(e.payer)){ paid[e.payer]+=amt; paidTotal+=amt; }
     });
-    return { total:total, share:share, paid:paid, paidTotal:paidTotal, n:n };
+    return { total:total, share:share, sharePaid: paidTotal/n, unpaidTotal: total-paidTotal, paid:paid, paidTotal:paidTotal, n:n };
   }
 
   // ---------- render ----------
@@ -254,7 +254,7 @@
   function recalc(){
     var c = compute();
     document.getElementById("st-total").innerHTML = fmt(c.total)+'<span class="cur">₪</span>';
-    document.getElementById("st-share").innerHTML = fmt(c.share)+'<span class="cur">₪</span>';
+    document.getElementById("st-share").innerHTML = fmt(c.unpaidTotal)+'<span class="cur">₪</span>';
     document.getElementById("st-paid").innerHTML = fmt(c.paidTotal)+'<span class="cur">₪</span>';
     document.getElementById("foot-total").textContent = cur(c.total);
     renderBalances(c);
@@ -373,7 +373,7 @@
     host.innerHTML = "";
     state.people.forEach(function(name){
       var paid = c.paid[name] || 0;
-      var bal = paid - c.share;           // >0 overpaid, <0 still owes
+      var bal = paid - c.sharePaid;       // >0 overpaid, <0 still owes — only what's been paid
       var card = document.createElement("div");
       card.className = "bcard";
 
@@ -385,7 +385,7 @@
       var rows = document.createElement("div");
       rows.className = "brows";
       rows.innerHTML =
-        '<div class="brow"><span class="k">חלקו</span><span class="v">'+cur(c.share)+'</span></div>' +
+        '<div class="brow"><span class="k">חלקו (מההוצאות ששולמו)</span><span class="v">'+cur(c.sharePaid)+'</span></div>' +
         '<div class="brow"><span class="k">שילם בפועל</span><span class="v">'+cur(paid)+'</span></div>';
       card.appendChild(rows);
 
@@ -406,13 +406,13 @@
     // intro — the goal, in plain words
     var intro = document.createElement("div");
     intro.className = "settle-intro";
-    intro.innerHTML = 'המטרה: כל אחד מבין ' + state.people.length + ' המשתתפים נושא בחלק שווה של <b>' + cur(c.share) + '</b>.';
+    intro.innerHTML = 'ההתחשבנות מבוססת על מה ש<b>כבר שולם</b> בלבד (' + cur(c.paidTotal) + '). כל אחד מבין ' + state.people.length + ' המשתתפים נושא בחלק שווה של <b>' + cur(c.sharePaid) + '</b>.';
     host.appendChild(intro);
 
     // who overpaid (creditors) vs who underpaid (debtors)
     var debtors = [], creditors = [];
     state.people.forEach(function(name){
-      var bal = (c.paid[name]||0) - c.share;
+      var bal = (c.paid[name]||0) - c.sharePaid;
       if(bal < -0.005) debtors.push({ n:name, amt:-bal });
       else if(bal > 0.005) creditors.push({ n:name, amt:bal });
     });
@@ -462,11 +462,12 @@
     var unpaidSum = unpaid.reduce(function(a,x){ return a + (Number(x.amount)||0); }, 0);
     if(unpaidSum > 0.005){
       var names = unpaid.map(function(x){ return (x.desc||"ללא שם").split("·")[0].trim(); }).join(", ");
+      var perHead = unpaidSum / (state.people.length || 1);
       var u = document.createElement("div");
       u.className = "settle-unpaid";
       u.innerHTML =
-        '<div class="u-txt"><b>עדיין לא שולם</b>' +
-          '<span class="u-sub">' + esc(names) + ' — טרם נבחר מי משלם. כשישולם, בחרו מי שילם וההתחשבנות תתעדכן.</span>' +
+        '<div class="u-txt"><b>עדיין לא שולם — לא נכלל בהתחשבנות</b>' +
+          '<span class="u-sub">' + esc(names) + '. כשמישהו ישלם — בחרו מי שילם, וזה יתחלק שווה (' + cur(perHead) + ' לאדם) ויתווסף להתחשבנות.</span>' +
         '</div>' +
         '<span class="u-amt">' + cur(unpaidSum) + '</span>';
       host.appendChild(u);
